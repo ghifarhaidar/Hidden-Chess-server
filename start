@@ -1,0 +1,17 @@
+#!/bin/sh
+# Back4App has no secret files, so the Firebase key arrives base64-encoded in FIREBASE_KEY_BASE64
+# and is written to a file only this process can read. A missing or malformed key stops the start,
+# because the server itself would start without Firebase and quietly misbehave.
+set -eu
+
+fail() { echo "start: $*" >&2; exit 1; }
+
+[ -n "${FIREBASE_KEY_BASE64:-}" ] || fail "FIREBASE_KEY_BASE64 is not set"
+umask 077
+key=$(mktemp)
+printf %s "$FIREBASE_KEY_BASE64" | base64 -d > "$key" 2>/dev/null || fail "FIREBASE_KEY_BASE64 is not base64"
+grep -q '"type": *"service_account"' "$key" && grep -q '"private_key"' "$key" \
+    || fail "FIREBASE_KEY_BASE64 is not a service-account key"
+unset FIREBASE_KEY_BASE64 SOURCE_PASSPHRASE
+export GOOGLE_APPLICATION_CREDENTIALS="$key"
+exec bin/server
